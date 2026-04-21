@@ -905,6 +905,13 @@ async def scrape_city(ctx, page, city, mobile, output_csv, product_slug):
         await page.wait_for_selector(CARD_SEL, timeout=15000)
     except Exception:
         print(f"[!] Cards not found for {city}. Skipping.")
+        # ADD THESE TWO LINES:
+        st.warning(f"⚠️ No cards matched selector for {city} — checking what's actually on the page...")
+        actual_classes = await page.evaluate("""() => {
+            const items = [...document.querySelectorAll('ul li')].slice(0, 10);
+            return items.map(li => li.className || '(no class)').join(' | ');
+        }""")
+        st.code(f"First <li> classes on {city} page:\n{actual_classes}")
         return 0
 
     otp_boxes, otp_frame = await wait_for_otp_boxes(page, timeout_secs=3)
