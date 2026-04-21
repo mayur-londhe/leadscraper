@@ -18,7 +18,7 @@ def ensure_playwright_installed():
     except ImportError:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "playwright"])
 
-    subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"])
+    subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
 
 ensure_playwright_installed()
 
