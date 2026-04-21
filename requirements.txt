@@ -1,15 +1,16 @@
-# Python dependencies for lead_pipeline.py
-# Install with: pip install -r requirements.txt
+# --- Core Dashboard & Environment ---
+streamlit>=1.40.0
+python-dotenv>=1.0.1
+nest_asyncio>=1.6.0
 
-# Core dependencies
-pandas>=2.0.0
-requests>=2.25.0
-python-dotenv>=1.0.0
+# --- Data Processing ---
+pandas>=2.2.0
+requests>=2.31.0
 
-# AI and Google APIs
-google-genai>=0.8.0
+# --- AI and Google APIs ---
+google-genai>=1.70.0
 
-# Web scraping and automation
-playwright>=1.40.0
-selenium>=4.15.0
-webdriver-manager>=4.0.0
+# --- Web Scraping and Automation ---
+playwright>=1.49.0
+selenium>=4.25.0
+webdriver-manager>=4.0.2

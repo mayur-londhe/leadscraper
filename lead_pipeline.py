@@ -34,6 +34,7 @@ import sys
 from datetime import datetime
 from google.genai import types  # <--- Add this
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import streamlit as st
 
 from google import genai
 import pandas as pd
@@ -77,8 +78,8 @@ def _import_selenium():
 #  CONFIGURATION  — edit keys / cities / file names here
 # ══════════════════════════════════════════════════════════════════════════════
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-PLACES_API_KEY = os.getenv("PLACES_API_KEY", "")
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+PLACES_API_KEY = st.secrets.get("PLACES_API_KEY", os.getenv("PLACES_API_KEY", ""))
 PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 
 if not GEMINI_API_KEY:
@@ -94,7 +95,7 @@ search_tool = {"google_search": {}}
 
 # IndiaMart target cities & product keyword
 CITIES = [
-    "Jodhpur",
+    "Jodhpur","Solapur","Karur","Vellore",
 ]
 INDIAMART_PRODUCT_SLUG = "hollow-blocks"     # used in URL: /<city>/<slug>.html
 
@@ -201,17 +202,50 @@ async def dismiss_modal(page):
 
 
 async def fill_otp(page, mobile, otp_boxes, otp_frame):
-    print()
-    otp = input(f"  📱 Enter OTP for +91-{mobile}: ").strip()
-    print()
+    SIGNAL_FILE = "otp_signal.txt"
+    
+    # Clear any old signals before starting
+    if os.path.exists(SIGNAL_FILE):
+        os.remove(SIGNAL_FILE)
+
+    print(f"\n📡 WAITING FOR OTP: Please enter the code for +91-{mobile} in the Web UI...")
+    
+    # --- UI BRIDGE LOOP ---
+    otp = ""
+    timeout = 120  # 2 minutes for your colleague to notice and type it
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
+        if os.path.exists(SIGNAL_FILE):
+            try:
+                with open(SIGNAL_FILE, "r") as f:
+                    otp = f.read().strip()
+                if len(otp) == 4:
+                    os.remove(SIGNAL_FILE) # Clean up after reading
+                    print(f"  [✓] Received OTP from UI: {otp}")
+                    break
+            except Exception:
+                pass # Handle file-access collisions
+        
+        await asyncio.sleep(1) # Don't burn CPU while waiting
+    
+    if not otp:
+        print("  [!] OTP Timeout: No code received from Web UI.")
+        return False
+
+    # --- FILLING LOGIC ---
     if otp_boxes:
         for i, digit in enumerate(otp[:4]):
-            await otp_boxes[i].click()
-            await page.wait_for_timeout(60)
-            await otp_boxes[i].fill(digit)
-            await page.wait_for_timeout(60)
+            try:
+                await otp_boxes[i].click()
+                await page.wait_for_timeout(100)
+                await otp_boxes[i].fill(digit)
+                await page.wait_for_timeout(100)
+            except Exception as e:
+                print(f"  [!] Error filling OTP box {i}: {e}")
         print("  [✓] OTP digits entered")
     else:
+        # Fallback for single-input fields
         for sel in ["input[name='otp']", "input[placeholder*='OTP']", "input[maxlength='4']"]:
             try:
                 f = await otp_frame.query_selector(sel)
@@ -220,6 +254,8 @@ async def fill_otp(page, mobile, otp_boxes, otp_frame):
                     break
             except Exception:
                 pass
+
+    # --- VERIFICATION LOGIC ---
     await page.wait_for_timeout(400)
     for sel in [
         "button:has-text('Verify & Login')", "button:has-text('Verify')",
@@ -236,16 +272,18 @@ async def fill_otp(page, mobile, otp_boxes, otp_frame):
             pass
     else:
         await page.keyboard.press("Enter")
+
+    # --- SUCCESS CHECK ---
     for _ in range(15):
         await page.wait_for_timeout(1000)
         if await is_logged_in(page):
             print("  [✓] Login successful!\n")
             await dismiss_modal(page)
             return True
+
     await dismiss_modal(page)
     print("  [!] Login status uncertain — continuing.")
     return False
-
 
 async def do_login(page, mobile):
     if await is_logged_in(page):
@@ -965,9 +1003,17 @@ async def scrape_city(ctx, page, city, mobile, output_csv, product_slug):
     return len(leads)
 
 
-async def run_step1(mobile, product_slug="concrete-blocks"):
+async def run_step1(mobile, product_slug="concrete-blocks", cities=None):
     async_playwright = _import_playwright()
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    if not cities:
+        cities = CITIES
+    elif isinstance(cities, str):
+        cities = [cities]
+    cities = [c.strip() for c in cities if isinstance(c, str) and c.strip()]
+    if not cities:
+        cities = CITIES
 
     print(f"""
 ╔══════════════════════════════════════════════════╗
@@ -975,7 +1021,7 @@ async def run_step1(mobile, product_slug="concrete-blocks"):
 ╠══════════════════════════════════════════════════╣
   Mobile     : {mobile}
   Product    : {product_slug}
-  Cities     : {', '.join(CITIES)}
+  Cities     : {', '.join(cities)}
   Output     : {STEP1_OUTPUT}
 ╚══════════════════════════════════════════════════╝
 """)
@@ -985,7 +1031,7 @@ async def run_step1(mobile, product_slug="concrete-blocks"):
         os.remove(STEP1_OUTPUT)
 
     async with async_playwright() as pw:
-        browser  = await pw.chromium.launch(headless=False)
+        browser  = await pw.chromium.launch(headless=True)
         ctx_args = {
             "user_agent": USER_AGENT,
             "viewport":   {"width": 1366, "height": 768},
@@ -998,7 +1044,7 @@ async def run_step1(mobile, product_slug="concrete-blocks"):
         ctx  = await browser.new_context(**ctx_args)
         page = await ctx.new_page()
 
-        first_url = f"https://dir.indiamart.com/{CITIES[0].lower()}/{product_slug}.html"
+        first_url = f"https://dir.indiamart.com/{cities[0].lower()}/{product_slug}.html"
         print(f"[*] Opening: {first_url}")
         await page.goto(first_url, wait_until="domcontentloaded", timeout=20000)
         await page.wait_for_timeout(2000)
@@ -1011,8 +1057,8 @@ async def run_step1(mobile, product_slug="concrete-blocks"):
             print("[*] Session active — already logged in.")
 
         city_summary = []
-        for i, city in enumerate(CITIES):
-            print(f"\n[►] City {i+1}/{len(CITIES)}: {city}")
+        for i, city in enumerate(cities):
+            print(f"\n[►] City {i+1}/{len(cities)}: {city}")
             try:
                 count = await scrape_city(ctx, page, city, mobile, STEP1_OUTPUT, product_slug)
                 city_summary.append((city, count, "✓"))
@@ -1160,6 +1206,7 @@ def get_selenium_driver():
     webdriver, Service, Options, By, WebDriverWait, EC, ChromeDriverManager = _import_selenium()
     opts = Options()
     opts.add_argument("--window-size=1366,768")
+    opts.add_argument("--headless=new") # Add this!
     opts.add_argument("--disable-blink-features=AutomationControlled")
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
     opts.add_experimental_option("useAutomationExtension", False)
@@ -1427,6 +1474,10 @@ def run_step3(input_csv, filter_city="", batch_size=10):
     df = pd.read_csv(input_csv)
     df.columns = df.columns.str.strip()
     
+    # Ensure columns exist
+    if "Category" not in df.columns:
+        df["Category"] = "N/A"
+    
     # Identify rows with *** or missing GST
     mask = (
         df["GST Number"].astype(str).str.contains(r"\*", na=False) | 
@@ -1450,37 +1501,24 @@ def run_step3(input_csv, filter_city="", batch_size=10):
                 "types": row.get("Google Business Type") or "Unknown"
             })
 
+        print(f"  📦 Batch {i//batch_size + 1}: {[b['name'] for b in batch_data]}")
+        print(f"  🌐 Calling get_batch_business_details...")
         results = get_batch_business_details(batch_data)
-
-        for j, res in enumerate(results):
-            if j < len(indices):
-                idx = indices[j]
-                # Apply Category (Single Label)
-                df.at[idx, "Type of place"] = res.get('category', 'N/A')
-                
-                # Apply and Verify GST
-                raw_gst = str(res.get('gst', 'N/A')).strip().upper()
-                gst_match = re.search(r'\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]Z[A-Z0-9]', raw_gst)
-                
-                if gst_match:
-                    found_gst = gst_match.group(0)
-                    # State Code Check
-                    city_state = str(df.at[idx, "City"]).lower()
-                    expected = STATE_TO_CODE.get(city_state)
-                    
-                    if expected and not found_gst.startswith(expected):
-                        print(f"    🚫 State Mismatch: Rejecting {found_gst} for {city_state}")
-                        df.at[idx, "GST Number"] = "N/A"
-                    else:
-                        df.at[idx, "GST Number"] = found_gst
-                        print(f"    ✅ Match: {found_gst} | {df.at[idx, 'Type of place']}")
-                else:
-                    print(f"    ❌ No GST for: {batch_data[j]['name']}")
-
-        df.to_csv(STEP3_OUTPUT, index=False)
-        time.sleep(4)
-
+        print(f"  ✅ Got {len(results)} results")
+        
+        # Update the dataframe with results
+        for j, result in enumerate(results):
+            idx = indices[j]
+            df.at[idx, "Category"] = result.get("category", "N/A")
+            if result.get("gst") and result["gst"] != "N/A":
+                df.at[idx, "GST Number"] = result["gst"]
+    
+    # Save the updated dataframe
+    df.to_csv(STEP3_OUTPUT, index=False)
+    print(f"✅ Step 3 output saved: {STEP3_OUTPUT}")
+    
     return STEP3_OUTPUT
+    
 #  ENTRY POINT
 # ══════════════════════════════════════════════════════════════════════════════
 
