@@ -904,16 +904,30 @@ async def scrape_city(ctx, page, city, mobile, output_csv, product_slug):
     try:
         await page.wait_for_selector(CARD_SEL, timeout=15000)
     except Exception:
-        print(f"[!] Cards not found for {city}. Skipping.")
-        # ADD THESE TWO LINES:
-        st.warning(f"⚠️ No cards matched selector for {city} — checking what's actually on the page...")
-        actual_classes = await page.evaluate("""() => {
-            const items = [...document.querySelectorAll('ul li')].slice(0, 10);
-            return items.map(li => li.className || '(no class)').join(' | ');
-        }""")
-        st.code(f"First <li> classes on {city} page:\n{actual_classes}")
+        st.warning(f"⚠️ No cards matched selector for {city}")
+        
+        # Check 1: Is there ANY content at all?
+        body_text = await page.evaluate("() => document.body.innerText.slice(0, 300)")
+        st.code(f"Body text preview:\n{body_text}")
+        
+        # Check 2: Total element count
+        el_count = await page.evaluate("() => document.querySelectorAll('*').length")
+        st.write(f"Total DOM elements: {el_count}")
+        
+        # Check 3: Are we hitting a CAPTCHA / block page?
+        title = await page.title()
+        st.write(f"Page title: `{title}`")
+        
+        # Check 4: Wait longer and retry
+        st.write("Waiting 5 more seconds for JS to render...")
+        await page.wait_for_timeout(5000)
+        all_li = await page.query_selector_all("li")
+        st.write(f"After 5s wait — total <li> elements: {len(all_li)}")
+        if all_li:
+            classes = [await li.get_attribute("class") or "(no class)" for li in all_li[:10]]
+            st.code("li classes after wait:\n" + " | ".join(classes))
+        
         return 0
-
     otp_boxes, otp_frame = await wait_for_otp_boxes(page, timeout_secs=3)
     if otp_boxes:
         await fill_otp(page, mobile, otp_boxes, otp_frame)
