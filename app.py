@@ -12,25 +12,18 @@ import os
 import sys
 import subprocess
 
-# --- ROBUST PLAYWRIGHT SETUP ---
 def ensure_playwright_installed():
     try:
-        # Try to import playwright to see if the module is visible
         import playwright
     except ImportError:
-        # If not visible, force install it into the current executable's environment
         subprocess.check_call([sys.executable, "-m", "pip", "install", "playwright"])
 
-    # Now run the browser installation using the current python executable
-    # This prevents the "No module named playwright" error
     subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"])
 
-# Run this at the very start of your script
 ensure_playwright_installed()
 
 nest_asyncio.apply()
-# Import your functions and constants from the main script
-# Ensure your script is named lead_pipeline.py or change the name below
+
 from lead_pipeline import (
     run_step1, run_step2, run_step3, 
     STEP1_OUTPUT, STEP2_OUTPUT, STEP3_OUTPUT, 
