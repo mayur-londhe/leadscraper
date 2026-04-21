@@ -9,11 +9,24 @@ import pandas as pd
 from datetime import datetime
 import nest_asyncio
 import os
+import sys
 import subprocess
 
-# This command installs the browser binaries if they are missing
-if not os.path.exists("/home/appuser/.cache/ms-playwright"):
-    subprocess.run(["python", "-m", "playwright", "install", "chromium", "--with-deps"])
+# --- ROBUST PLAYWRIGHT SETUP ---
+def ensure_playwright_installed():
+    try:
+        # Try to import playwright to see if the module is visible
+        import playwright
+    except ImportError:
+        # If not visible, force install it into the current executable's environment
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "playwright"])
+
+    # Now run the browser installation using the current python executable
+    # This prevents the "No module named playwright" error
+    subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"])
+
+# Run this at the very start of your script
+ensure_playwright_installed()
 
 nest_asyncio.apply()
 # Import your functions and constants from the main script
