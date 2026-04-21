@@ -116,11 +116,25 @@ if st.button("🚀 START PIPELINE", use_container_width=True):
             # In app.py, replace the asyncio.run line with this:
             if 1 in selected_steps:
                 status_area.info("🏃 Step 1: Scraping IndiaMart...")
-                print("[DEBUG] Calling run_step1")
-                asyncio.run(run_step1(mobile_number, product_slug=prod_slug, cities=target_cities))
-                st.toast("Step 1 Complete!")
-                status_area.info("🏃 Step 1: Scraping IndiaMart... (Watch for Browser/OTP)")
+                log_box = st.empty()
                 
+                try:
+                    loop = asyncio.get_event_loop()
+                    loop.run_until_complete(
+                        run_step1(mobile_number, product_slug=prod_slug, cities=target_cities)
+                    )
+                except Exception as e:
+                    import traceback
+                    st.error(f"❌ Step 1 failed: {e}")
+                    st.code(traceback.format_exc())  # Shows full traceback in UI
+                    st.stop()
+                
+                if os.path.exists(STEP1_OUTPUT):
+                    df1 = pd.read_csv(STEP1_OUTPUT)
+                    st.success(f"✅ Step 1 done — {len(df1)} rows scraped")
+                else:
+                    st.error("⚠️ Step 1 ran but no CSV was created. Likely a scraping/login failure.")
+                    st.stop()
             # --- STEP 2 ---
             if 2 in selected_steps:
                 status_area.info("🏃 Step 2: Google Places Enrichment...")
