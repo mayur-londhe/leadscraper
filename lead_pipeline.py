@@ -1031,7 +1031,11 @@ async def run_step1(mobile, product_slug="concrete-blocks", cities=None):
         os.remove(STEP1_OUTPUT)
 
     async with async_playwright() as pw:
-        browser  = await pw.chromium.launch(headless=True)
+        browser  = await pw.chromium.launch(headless=True,args=[
+                "--no-sandbox", 
+                "--disable-dev-shm-usage",
+                "--disable-gpu"
+            ])
         ctx_args = {
             "user_agent": USER_AGENT,
             "viewport":   {"width": 1366, "height": 768},
@@ -1518,7 +1522,7 @@ def run_step3(input_csv, filter_city="", batch_size=10):
     print(f"✅ Step 3 output saved: {STEP3_OUTPUT}")
     
     return STEP3_OUTPUT
-    
+
 #  ENTRY POINT
 # ══════════════════════════════════════════════════════════════════════════════
 

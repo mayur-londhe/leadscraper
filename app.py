@@ -8,7 +8,12 @@ import os
 import pandas as pd
 from datetime import datetime
 import nest_asyncio
+import os
+import subprocess
 
+# This command installs the browser binaries if they are missing
+if not os.path.exists("/home/appuser/.cache/ms-playwright"):
+    subprocess.run(["python", "-m", "playwright", "install", "chromium", "--with-deps"])
 
 nest_asyncio.apply()
 # Import your functions and constants from the main script
