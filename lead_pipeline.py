@@ -893,6 +893,7 @@ async def scrape_city(ctx, page, city, mobile, output_csv, product_slug):
 
     # ── REDIRECT DETECTION — skip city if IndiaMart sends us to a national page ──
     final_url = page.url
+    st.write(f"DEBUG → City: {city}, Final URL: {final_url}")
     if city_slug not in final_url:
         print(f"   [⚠] WARNING: IndiaMart redirected to national page for {city}.")
         print(f"       Final URL : {final_url}")
