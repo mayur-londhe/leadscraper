@@ -95,7 +95,7 @@ search_tool = {"google_search": {}}
 
 # IndiaMart target cities & product keyword
 CITIES = [
-    "Jodhpur","Solapur","Karur","Vellore",
+    "Bengaluru","Belagaum","Kunigal","Mysuru","Jodhpur","Kota","Nagaur","Beawar","Barmer","Chennai","Tiruppur","Coimbatore","Karur","Vellore"
 ]
 INDIAMART_PRODUCT_SLUG = "hollow-blocks"     # used in URL: /<city>/<slug>.html
 
